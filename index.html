@@ -1,308 +1,574 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Interactive E-Bike Rental Guide – Follonica Region</title>
-
-  <!-- Tailwind & Chart.js CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-  <!-- Font – Inter -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
-
-  <style>
-    body            { font-family: 'Inter', sans-serif; }
-    .chart-container{ position:relative; width:100%; max-width:900px; margin:auto; height:400px; max-height:50vh; }
-    @media (max-width:768px){ .chart-container{ height:350px; } }
-    .modal-bg       { backdrop-filter:blur(5px); }
-    .active-filter  { background:#0369a1; color:#fff; }
-    .inactive-filter{ background:#e2e8f0; color:#334155; }
-    .provider-card  { transition:transform .2s ease, box-shadow .2s ease; }
-    .provider-card:hover{ transform:translateY(-5px); box-shadow:0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -2px rgba(0,0,0,.05); }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive E-Bike Rental Guide - Follonica Region</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Tuscan Sun -->
+    <!-- Application Structure Plan: The SPA is designed as an interactive dashboard. The primary user goal is to compare rental options. The structure facilitates this by: 1. A top control panel with filters for location (now including 'All'), battery capacity, bike type, and exchangeable battery options. This allows users to immediately narrow down options based on their needs. 2. A dynamic bar chart that visually compares the maximum available battery capacity of the filtered providers, offering a quick performance overview. 3. A responsive grid of provider 'cards' that updates in real-time based on the filters. Each card gives a summary, and a 'Details' button opens a modal with the full, unabridged information from the report. This task-oriented, filter-driven structure is more usable than a static, linear report, enabling users to actively query the data and find the best rental for their specific cycling plans in Tuscany. -->
+    <!-- Visualization & Content Choices: 1. **Provider Data -> Organize/Compare -> Filterable Card Grid (HTML/JS/Tailwind):** Cards are ideal for scannable summaries. Filtering allows direct comparison. A modal on click provides deep-dive info without cluttering the main UI. 2. **Battery Capacity (Wh) -> Compare -> Interactive Bar Chart (Chart.js/Canvas):** This key quantitative data is best visualized. A bar chart clearly ranks providers by power potential. It's dynamically updated by filters, making it a central decision-making tool. 3. **Location -> Organize -> Radio Filter Buttons (HTML/JS):** A clear 'All' or specific selection option for location, allowing users to quickly narrow down or expand their search. 4. **Bike Type -> Organize -> Multi-select Filter Buttons:** Allows users to find providers catering to their specific activity (MTB, City, etc.). 5. **Exchangeable Battery -> Organize -> Radio Filter Buttons:** A clear yes/no/all option for a specific feature, allowing users to quickly find bikes with extended range capability. 6. **Warnings/Missing Info -> Inform -> Iconography (HTML/Unicode) + Text:** Important notes, like conflicting battery data, are highlighted with icons (⚠️, ❗) and detailed text in the modal to ensure user awareness. This design prioritizes interactive data exploration and comparison. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .chart-container { position: relative; width: 100%; max-width: 900px; margin-left: auto; margin-right: auto; height: 400px; max-height: 50vh; }
+        @media (max-width: 768px) { .chart-container { height: 350px; } }
+        .modal-bg { backdrop-filter: blur(5px); }
+        .active-filter { background-color: #0369a1; color: white; }
+        .inactive-filter { background-color: #e2e8f0; color: #334155; }
+        .provider-card { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
+        .provider-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+    </style>
 </head>
 <body class="bg-stone-50 text-stone-800">
-  <!-- ────── Modal (hidden until “Show Details” is clicked) ────── -->
-  <div id="modal-container" class="fixed inset-0 z-50 hidden items-center justify-center p-4 modal-bg" onclick="closeModal()">
-    <div id="modal-content" class="relative w-full max-w-3xl max-h-[90vh] p-8 overflow-y-auto bg-white rounded-2xl shadow-2xl" onclick="event.stopPropagation()"></div>
-  </div>
 
-  <!-- ────── Header ────── -->
-  <header class="py-8 text-center bg-white shadow-sm">
-    <div class="container mx-auto px-4">
-      <h1 class="text-4xl font-bold tracking-tight text-cyan-800">E-Bike Rental Guide</h1>
-      <p class="mt-2 text-lg text-stone-600">Explore e-bike rental options in the Follonica region</p>
+    <div id="modal-container" class="fixed inset-0 z-50 items-center justify-center hidden p-4 modal-bg" onclick="closeModal()">
+        <div id="modal-content" class="relative w-full max-w-3xl max-h-[90vh] p-8 overflow-y-auto bg-white rounded-2xl shadow-2xl" onclick="event.stopPropagation()">
+        </div>
     </div>
-  </header>
 
-  <main class="container mx-auto my-8 p-4 md:p-8">
-    <!-- Intro -->
-    <section id="intro" class="mb-12">
-      <div class="p-8 bg-white rounded-lg shadow-md">
-        <h2 class="mb-4 text-2xl font-bold text-cyan-700">Find Your Ideal E-Bike in Maremma</h2>
-        <p class="text-stone-600">
-          This interactive application helps you navigate e-bike rental options within a 50&nbsp;km radius of Follonica.
-          Use the filters below to customise your search. Results, provider cards and the battery-capacity chart update instantly.
-        </p>
-      </div>
-    </section>
-
-    <!-- ────── Filters ────── -->
-    <section id="filters" class="p-6 mb-8 bg-white rounded-lg shadow-md">
-      <div class="grid grid-cols-1 gap-6 md:grid-cols-4">
-        <!-- Location radio buttons -->
-        <div>
-          <h3 class="mb-3 font-semibold text-stone-700">📍 Filter by Location</h3>
-          <div id="location-filters" class="flex flex-wrap gap-2"></div>
+    <header class="py-8 text-center bg-white shadow-sm">
+        <div class="container px-4 mx-auto">
+            <h1 class="text-4xl font-bold tracking-tight text-cyan-800">E-Bike Rental Guide</h1>
+            <p class="mt-2 text-lg text-stone-600">Explore e-bike rental options in the Follonica region</p>
         </div>
-        <!-- Battery radio buttons -->
-        <div>
-          <h3 class="mb-3 font-semibold text-stone-700">🔋 Filter by Battery Capacity&nbsp;(Wh)</h3>
-          <div id="battery-filters" class="flex flex-wrap gap-2"></div>
-        </div>
-        <!-- Bike-type multi-select buttons -->
-        <div>
-          <h3 class="mb-3 font-semibold text-stone-700">🚲 Filter by Bike Type</h3>
-          <div id="type-filters" class="flex flex-wrap gap-2"></div>
-        </div>
-        <!-- Exchangeable-battery radio buttons -->
-        <div>
-          <h3 class="mb-3 font-semibold text-stone-700">⚡ Exchangeable Battery</h3>
-          <div id="exchangeable-battery-filters" class="flex flex-wrap gap-2"></div>
-        </div>
-      </div>
-      <div class="mt-6 text-center">
-        <button id="reset-filters-btn" class="px-6 py-2 font-semibold text-white transition-colors rounded-lg bg-cyan-600 hover:bg-cyan-700">Reset Filters</button>
-      </div>
-    </section>
+    </header>
 
-    <!-- ────── Chart ────── -->
-    <section id="chart-section" class="mb-12">
-      <div class="p-8 bg-white rounded-lg shadow-md">
-        <h2 class="mb-2 text-2xl font-bold text-center text-cyan-700">Maximum Battery Capacity Comparison</h2>
-        <p class="mb-6 text-center text-stone-600">This chart shows the maximum battery capacity (Wh) available from each filtered provider.</p>
-        <div class="chart-container"><canvas id="batteryChart"></canvas></div>
-      </div>
-    </section>
+    <main class="container p-4 mx-auto my-8 md:p-8">
+        
+        <section id="intro" class="mb-12">
+             <div class="p-8 bg-white rounded-lg shadow-md">
+                <h2 class="mb-4 text-2xl font-bold text-cyan-700">Find Your Ideal E-Bike in Maremma</h2>
+                <p class="text-stone-600">This interactive application helps you navigate e-bike rental options within a 50km radius of Follonica. Use the filters below to customize your search based on location, preferred bike type, and the battery capacity you need. The results will update instantly, showing you a list of providers and a comparative chart to help you make the best choice for your adventures in Tuscany.</p>
+            </div>
+        </section>
 
-    <!-- ────── Results ────── -->
-    <section id="results">
-      <div class="flex items-center justify-between mb-6">
-        <h2 class="text-2xl font-bold text-cyan-700">Available Providers</h2>
-        <p id="results-count" class="font-semibold text-stone-600"></p>
-      </div>
-      <div id="provider-grid" class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3"></div>
-    </section>
-  </main>
+        <section id="filters" class="p-6 mb-8 bg-white rounded-lg shadow-md">
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-4">
+                <div>
+                    <h3 class="mb-3 font-semibold text-stone-700">📍 Filter by Location</h3>
+                    <div id="location-filters" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div>
+                    <h3 class="mb-3 font-semibold text-stone-700">🔋 Filter by Battery Capacity (Wh)</h3>
+                    <div id="battery-filters" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div>
+                    <h3 class="mb-3 font-semibold text-stone-700">🚲 Filter by Bike Type</h3>
+                    <div id="type-filters" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div>
+                    <h3 class="mb-3 font-semibold text-stone-700">⚡ Exchangeable Battery</h3>
+                    <div id="exchangeable-battery-filters" class="flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+             <div class="mt-6 text-center">
+                <button id="reset-filters-btn" class="px-6 py-2 font-semibold text-white transition-colors rounded-lg bg-cyan-600 hover:bg-cyan-700">Reset Filters</button>
+            </div>
+        </section>
 
-  <footer class="mt-12 py-6 text-center text-white bg-cyan-800">
-    <p>&copy; 2024 Interactive E-Bike Guide. All data based on the provided report.</p>
-  </footer>
+        <section id="chart-section" class="mb-12">
+            <div class="p-8 bg-white rounded-lg shadow-md">
+                <h2 class="mb-2 text-2xl font-bold text-center text-cyan-700">Maximum Battery Capacity Comparison</h2>
+                <p class="mb-6 text-center text-stone-600">This chart shows the maximum battery capacity (in Wh) available from each filtered provider. A higher capacity suggests a longer range, ideal for challenging excursions.</p>
+                <div class="chart-container">
+                    <canvas id="batteryChart"></canvas>
+                </div>
+            </div>
+        </section>
+        
+        <section id="results">
+            <div class="flex items-center justify-between mb-6">
+                 <h2 class="text-2xl font-bold text-cyan-700">Available Providers</h2>
+                 <p id="results-count" class="font-semibold text-stone-600"></p>
+            </div>
+            <div id="provider-grid" class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+            </div>
+        </section>
 
-  <!-- ────── JavaScript ────── -->
-  <script>
-  /* ----------  PROVIDER DATA  ---------- */
-  const providersData = [
-    { id: 1,
-      name: "Podere Cascatelle & Agriletizia",
-      location: "Follonica",
-      types: ["e-MTB"],
-      bikes: [ { brand: "Scott", model: "Unspecified models", battery: null } ],
-      summary: "Offers Scott e-bikes with a focus on guided excursions along the coast and hills.",
-      notes:   "Exact battery capacity (Wh) and specific models are not indicated. Direct contact is required for technical details.",
-      contact: "Tel: 0566940028 / +393339191867 | Email: info@poderecascatelle.it",
-      hasExchangeableBattery: false
-    },
-    { id: 3,
-      name: "Camping Village Il Fontino",
-      location: "Scarlino",
-      types: ["e-MTB"],
-      bikes: [ { brand: "Unspecified", model: "Latest generation E-bike", battery: null } ],
-      summary: "Rents e-MTBs for excursions, suitable for the Bandite di Scarlino Nature Reserve.",
-      notes:   "Brands, models, or battery capacities are not specified. Direct contact is essential for crucial technical information.",
-      contact: "Prices: 1 e-MTB/day €25, 1 week €120.",
-      hasExchangeableBattery: false
-    },
-    // ……………………………………………………………………………………………………………
-    //  (FULL array from your original code – left intact)  
-    //  Paste the remaining provider objects here.
-    // ……………………………………………………………………………………………………………
-  ];
+    </main>
 
-  /* ----------  STATE ---------- */
-  let activeFilters = { locations: null, battery: null, types: [], exchangeableBattery: null };
-  let batteryChart;
+    <footer class="py-6 mt-12 text-center text-white bg-cyan-800">
+        <p>&copy; 2024 Interactive E-Bike Guide. All data based on the provided report.</p>
+    </footer>
 
-  /* ----------  STARTUP ---------- */
-  document.addEventListener('DOMContentLoaded', () => {
-    setupFilters();
-    renderAll();
-    document.getElementById('reset-filters-btn').addEventListener('click', resetFilters);
-  });
+    <script>
+        const providersData = [
+            {
+                id: 1,
+                name: 'Podere Cascatelle & Agriletizia',
+                location: 'Follonica',
+                types: ['e-MTB'],
+                bikes: [
+                    { brand: 'Scott', model: 'Unspecified models', battery: null },
+                ],
+                summary: 'Offers Scott e-bikes with a focus on guided excursions along the coast and hills.',
+                notes: 'Exact battery capacity (Wh) and specific models are not indicated. Direct contact is required for technical details.',
+                contact: 'Tel: 0566940028 / +393339191867 | Email: info@poderecascatelle.it',
+                hasExchangeableBattery: false
+            },
+            {
+                id: 3,
+                name: 'Camping Village Il Fontino',
+                location: 'Scarlino',
+                types: ['e-MTB'],
+                bikes: [
+                    { brand: 'Unspecified', model: 'Latest generation E-bike', battery: null },
+                ],
+                summary: 'Rents e-MTBs for excursions, suitable for the Bandite di Scarlino Nature Reserve.',
+                notes: 'Brands, models, or battery capacities are not specified. Direct contact is essential for crucial technical information.',
+                contact: 'Prices: 1 e-MTB/day €25, 1 week €120.',
+                hasExchangeableBattery: false
+            },
+            {
+                id: 4,
+                name: 'Bike Service Massa Marittima',
+                location: 'Massa Marittima',
+                types: ['e-MTB'],
+                bikes: [
+                    { brand: 'Scott', model: 'Genius 930', battery: 625 },
+                    { brand: 'Scott', model: 'Patron eRIDE (e.g., 920)', battery: 750 },
+                    { brand: 'Scott', model: 'Genius eRIDE (e.g., 920)', battery: 625, rangeBooster: 500, exchangeableBattery: true },
+                    { brand: 'Scott', model: 'Strike eRide 920', battery: 625, rangeBooster: 500, exchangeableBattery: true },
+                    { brand: 'Scott', model: 'Ransom eRide', battery: 625 }, // Assumed 625Wh based on context
+                ],
+                summary: 'Specialized bike hotel with a large fleet of high-performance Scott e-MTBs.',
+                notes: 'Premier destination for e-MTBs with very high battery capacity options (up to 1125 Wh with range booster), ideal for serious trail riding.',
+                contact: 'Tel: +39 0566 902177 / +39 339 3439719',
+                hasExchangeableBattery: true
+            },
+            {
+                id: 5,
+                name: 'EasyBike Maremma',
+                location: 'Castiglione della Pescaia',
+                types: ['City/Trekking', 'Gravel', 'e-MTB', 'Junior'],
+                bikes: [
+                    { brand: 'XP Bikes', model: 'Funky', battery: 696 },
+                    { brand: 'XP Bikes', model: 'I-K Kompact 20″+', battery: 696 },
+                    { brand: 'XP Bikes', model: 'Citybike D6.2', battery: 672 },
+                    { brand: 'Bergamont', model: 'E-Revox Sport FMN', battery: 625 },
+                    { brand: 'XP', model: 'F-M 120 MTB', battery: 840 },
+                    { brand: 'Bergamont', model: 'E-Revox 4', battery: 500 },
+                    { brand: 'Raymon', model: 'SIXRAY E 3.0', battery: 500 },
+                    { brand: 'Wilier', model: 'Triestina Hybrid', battery: 250, rangeBooster: 210, exchangeableBattery: true },
+                    { brand: 'Wilier', model: 'Jena Hybrid', battery: 250, rangeBooster: 210, exchangeableBattery: true },
+                    { brand: 'Cicli Adriatica', model: 'Tora', battery: 720 },
+                    { brand: 'XP', model: 'I-MD 9.1 UNISEX', battery: 672 },
+                    { brand: 'Cicli Adriatica', model: 'Rayon', battery: 720 },
+                    { brand: 'XP', model: 'D8.2', battery: 720 },
+                    { brand: 'Megamo', model: 'Top City', battery: 375 },
+                    { brand: 'Focus', model: 'Jam 2 29 LTD', battery: 760 },
+                    { brand: 'Focus', model: 'Bold 2 Plus', battery: 378, rangeBooster: 378, exchangeableBattery: true },
+                    { brand: 'Megamo', model: 'Kinetic', battery: 418 },
+                ],
+                summary: 'The most diverse fleet, with city bikes, gravel, and e-MTBs of various brands and professional F.C.I. guides.',
+                notes: 'Wide range of battery capacities, from 250Wh to 840Wh. An excellent choice for almost any type of cyclist.',
+                contact: 'Email: info@easybikemaremma.it | Tel: +39 3383710101',
+                hasExchangeableBattery: true
+            },
+            {
+                id: 6,
+                name: 'Freedome',
+                location: 'Castiglione della Pescaia',
+                types: ['City/Trekking', 'e-MTB', 'Junior'],
+                bikes: [
+                    { brand: 'Unspecified', model: 'City e-bike', battery: null },
+                    { brand: 'Unspecified', model: 'e-MTB', battery: null },
+                ],
+                summary: 'Family-oriented rental with distinction between city e-bikes and e-MTBs. Free child seats.',
+                notes: 'Brands, models, or battery capacities are not specified. Their strong point is the user and family-oriented approach.',
+                contact: 'Locality Riva del Sole. Minimum age 12 years.',
+                hasExchangeableBattery: false
+            },
+            {
+                id: 7,
+                name: 'Golf Hotel Punta Ala',
+                location: 'Punta Ala',
+                types: ['e-MTB', 'Gravel'],
+                bikes: [
+                    { brand: 'Giant', model: 'Fathom E+3 Power', battery: 500 },
+                    { brand: 'Giant', model: 'Trance E+2 Pro', battery: 625, rangeBooster: 250, exchangeableBattery: true },
+                ],
+                summary: 'Premium service with Bike Center, Giant and Liv models, and personalized tours.',
+                notes: 'High-quality offer combining comfort and performance, with good battery capacities (up to 875 Wh with extender) to explore the trails of Punta Ala.',
+                contact: 'Email: fom@golfhotelpuntaala.it | Tel: +39 0564 9401',
+                hasExchangeableBattery: true
+            },
+            {
+                id: 8,
+                name: 'Piombino E-Bike Rent',
+                location: 'Piombino',
+                types: ['e-MTB', 'City/Trekking', 'Junior'],
+                bikes: [
+                    { brand: 'Fantic', model: 'XF3 Mountain Bike Elettrica', battery: 630 },
+                    { brand: 'Fantic', model: 'XF1 140', battery: 630 },
+                    { brand: 'Fantic', model: 'Seven Days Metro', battery: 630, conflicting: 400 },
+                    { brand: 'Fantic', model: 'Fat Sport 24 (Kids)', battery: 630 },
+                ],
+                summary: 'Specialized in Fantic e-bikes for urban and mountain use, including models for children.',
+                notes: '⚠️ Conflicting information on the battery of the "Seven Days Metro" model (630Wh vs 400Wh). It is advisable to verify directly with the provider.',
+                contact: 'Website for contacts and reservations.',
+                hasExchangeableBattery: false
+            },
+            {
+                id: 9,
+                name: 'Funnybike Rent',
+                location: 'San Vincenzo',
+                types: ['e-MTB', 'Gravel', 'Junior'],
+                bikes: [
+                    { brand: 'Torpado', model: 'THOR-T990 (Full)', battery: 720 },
+                    { brand: 'World Dimension', model: 'ASTER MTB 27.5 (Junior)', battery: 499 },
+                    { brand: 'Garelli', model: 'IMAGO TK2 (Trekking)', battery: 720 },
+                    { brand: 'Focus', model: 'JAM6.8 (Down Hill)', battery: 750 },
+                    { brand: 'Parkpre', model: 'E-ALGRAVEL-APEX1 (Gravel)', battery: 500 },
+                ],
+                summary: 'Very specific and transparent offer, with specialized e-bikes like Downhill and Gravel.',
+                notes: 'Clarity on models and battery capacities is a great advantage for experienced cyclists looking for specific performance.',
+                contact: 'Website for contacts and accessory rentals.',
+                hasExchangeableBattery: false
+            },
+            {
+                id: 10,
+                name: 'Tutun Club',
+                location: 'San Vincenzo',
+                types: ['City/Trekking', 'e-MTB'],
+                bikes: [
+                     { brand: 'Unspecified', model: 'Trekking & MTB models', battery: null },
+                ],
+                summary: 'Trekking and mountain e-bike rental with an estimated range between 50 and 100 km.',
+                notes: 'Range is a general estimate. Details on brands, models, and exact battery capacity (Wh) are missing, making quantitative comparison difficult.',
+                contact: 'Direct contact for specific information.',
+                hasExchangeableBattery: false
+            },
+            {
+                id: 11,
+                name: 'Ride in the Box',
+                location: 'Roccastrada',
+                types: ['e-MTB', 'Road', 'Gravel'],
+                bikes: [
+                    { brand: 'Cannondale', model: 'Tesoro Neo X2', battery: 625 },
+                    { brand: 'Cannondale', model: 'Synapse Neo Allroad', battery: 400, rangeBooster: 250, exchangeableBattery: true },
+                    { brand: 'Unspecified', model: 'E.Road', battery: null },
+                    { brand: 'Unspecified', model: 'E.mtb', battery: null },
+                ],
+                summary: 'Home bike delivery service to partner accommodations, with Cannondale models.',
+                notes: 'Ideal for those seeking convenience and simplified logistics. Offers a 10% discount for guests of partner facilities.',
+                contact: 'Partner: Pieve di Caminino Historic Farm.',
+                hasExchangeableBattery: true
+            }
+        ];
 
-  /* ----------  FILTER-UI GENERATION ---------- */
-  function setupFilters() {
-    const uniqueLocations = [...new Set(providersData.map(p => p.location))];
-    const locationOptions = [{ label: 'All', value: null }, ...uniqueLocations.map(loc => ({ label: loc, value: loc }))];
+        let activeFilters = {
+            locations: null, // Changed to null for 'All' selection
+            battery: null,
+            types: [],
+            exchangeableBattery: null 
+        };
+        
+        let batteryChart;
 
-    const types = [...new Set(providersData.flatMap(p => p.types))];
-    const batteryRanges = [
-      { label: 'All', value: null },
-      { label: '< 500 Wh', value: [0, 499] },
-      { label: '500-700 Wh', value: [500, 700] },
-      { label: '> 700 Wh', value: [701, Infinity] }
-    ];
-    const exchangeableBatteryOptions = [
-      { label: 'All', value: null },
-      { label: 'Yes', value: true },
-      { label: 'No', value: false }
-    ];
+        document.addEventListener('DOMContentLoaded', () => {
+            setupFilters();
+            renderAll();
+            document.getElementById('reset-filters-btn').addEventListener('click', resetFilters);
+        });
+        
+        function setupFilters() {
+            const uniqueLocations = [...new Set(providersData.map(p => p.location))];
+            const locationOptions = [{ label: 'All', value: null }, ...uniqueLocations.map(loc => ({ label: loc, value: loc }))];
+            
+            const types = [...new Set(providersData.flatMap(p => p.types))];
+            const batteryRanges = [
+                { label: 'All', value: null },
+                { label: '< 500 Wh', value: [0, 499] },
+                { label: '500-700 Wh', value: [500, 700] },
+                { label: '> 700 Wh', value: [701, Infinity] },
+            ];
+            const exchangeableBatteryOptions = [
+                { label: 'All', value: null },
+                { label: 'Yes', value: true },
+                { label: 'No', value: false }
+            ];
 
-    const locationFiltersContainer = document.getElementById('location-filters');
-    locationOptions.forEach(o => locationFiltersContainer.appendChild(createFilterButton(o.label,'locations',o.value,true)));
+            const locationFiltersContainer = document.getElementById('location-filters');
+            locationOptions.forEach(option => {
+                const button = createFilterButton(option.label, 'locations', option.value, true); // locations now behave as radio
+                locationFiltersContainer.appendChild(button);
+            });
+            
+            const batteryFiltersContainer = document.getElementById('battery-filters');
+            batteryRanges.forEach(range => {
+                const button = createFilterButton(range.label, 'battery', range.value, true);
+                batteryFiltersContainer.appendChild(button);
+            });
 
-    const batteryFiltersContainer = document.getElementById('battery-filters');
-    batteryRanges.forEach(r => batteryFiltersContainer.appendChild(createFilterButton(r.label,'battery',r.value,true)));
+            const typeFiltersContainer = document.getElementById('type-filters');
+            types.forEach(type => {
+                const button = createFilterButton(type, 'types', type, false); // Types remain multi-select
+                typeFiltersContainer.appendChild(button);
+            });
 
-    const typeFiltersContainer = document.getElementById('type-filters');
-    types.forEach(t => typeFiltersContainer.appendChild(createFilterButton(t,'types',t,false)));
+            const exchangeableBatteryFiltersContainer = document.getElementById('exchangeable-battery-filters');
+            exchangeableBatteryOptions.forEach(option => {
+                const button = createFilterButton(option.label, 'exchangeableBattery', option.value, true);
+                exchangeableBatteryFiltersContainer.appendChild(button);
+            });
+        }
+        
+        function createFilterButton(value, category, dataValue = value, isRadio = false) {
+            const button = document.createElement('button');
+            button.textContent = value;
+            button.dataset.value = JSON.stringify(dataValue);
+            button.dataset.category = category;
+            button.className = `px-3 py-1.5 text-sm font-medium rounded-full transition-colors inactive-filter`;
+            
+            // Set initial active state for 'All' options
+            if (isRadio && dataValue === null) {
+                button.classList.replace('inactive-filter', 'active-filter');
+            }
 
-    const exchFiltersContainer = document.getElementById('exchangeable-battery-filters');
-    exchangeableBatteryOptions.forEach(o => exchFiltersContainer.appendChild(createFilterButton(o.label,'exchangeableBattery',o.value,true)));
-  }
+            button.addEventListener('click', () => {
+                toggleFilter(button, category, dataValue, isRadio);
+            });
+            return button;
+        }
 
-  function createFilterButton(text, category, dataValue=text, isRadio=false) {
-    const btn = document.createElement('button');
-    btn.textContent = text;
-    btn.dataset.value = JSON.stringify(dataValue);
-    btn.dataset.category = category;
-    btn.className = 'px-3 py-1.5 text-sm font-medium rounded-full transition-colors inactive-filter';
-    if (isRadio && dataValue===null) btn.classList.replace('inactive-filter','active-filter');
-    btn.addEventListener('click', () => toggleFilter(btn,category,dataValue,isRadio));
-    return btn;
-  }
+        function toggleFilter(button, category, value, isRadio) {
+            if (isRadio) {
+                activeFilters[category] = value;
+                document.querySelectorAll(`[data-category="${category}"]`).forEach(btn => {
+                    btn.classList.replace('active-filter', 'inactive-filter');
+                });
+                button.classList.replace('inactive-filter', 'active-filter');
+            } else { // Multi-select behavior for 'types'
+                const currentValues = activeFilters[category];
+                const index = currentValues.indexOf(value);
+                if (index > -1) {
+                    currentValues.splice(index, 1);
+                    button.classList.replace('active-filter', 'inactive-filter');
+                } else {
+                    currentValues.push(value);
+                    button.classList.replace('inactive-filter', 'active-filter');
+                }
+            }
+            renderAll();
+        }
 
-  function toggleFilter(btn, category, value, isRadio) {
-    if (isRadio) {
-      activeFilters[category] = value;
-      document.querySelectorAll(`[data-category="${category}"]`).forEach(b => b.classList.replace('active-filter','inactive-filter'));
-      btn.classList.replace('inactive-filter','active-filter');
-    } else {
-      const arr = activeFilters[category];
-      const idx = arr.indexOf(value);
-      if (idx>-1) { arr.splice(idx,1); btn.classList.replace('active-filter','inactive-filter'); }
-      else { arr.push(value); btn.classList.replace('inactive-filter','active-filter'); }
-    }
-    renderAll();
-  }
+        function resetFilters() {
+            activeFilters = { locations: null, battery: null, types: [], exchangeableBattery: null };
+             document.querySelectorAll('#filters button').forEach(btn => {
+                const category = btn.dataset.category;
+                const value = JSON.parse(btn.dataset.value);
+                // For radio filters, activate 'All' option
+                if ((category === 'battery' || category === 'exchangeableBattery' || category === 'locations') && value === null) {
+                    btn.classList.replace('inactive-filter', 'active-filter');
+                } else {
+                    // For multi-select, deactivate all
+                    btn.classList.replace('active-filter', 'inactive-filter');
+                }
+            });
+            renderAll();
+        }
 
-  function resetFilters() {
-    activeFilters = { locations: null, battery: null, types: [], exchangeableBattery: null };
-    document.querySelectorAll('#filters button').forEach(btn => {
-      const cat = btn.dataset.category;
-      const val = JSON.parse(btn.dataset.value);
-      if ((cat==='battery'||cat==='exchangeableBattery'||cat==='locations') && val===null)
-        btn.classList.replace('inactive-filter','active-filter');
-      else
-        btn.classList.replace('active-filter','inactive-filter');
-    });
-    renderAll();
-  }
+        function filterData() {
+            return providersData.filter(provider => {
+                const locationMatch = activeFilters.locations === null || activeFilters.locations === provider.location;
+                const typeMatch = activeFilters.types.length === 0 || provider.types.some(t => activeFilters.types.includes(t));
+                
+                const batteryMatch = (() => {
+                    if (!activeFilters.battery) return true;
+                    const maxBattery = provider.bikes.reduce((max, bike) => {
+                         const total = (bike.battery || 0) + (bike.rangeBooster || 0);
+                         return total > max ? total : max;
+                    }, 0);
+                    if (maxBattery === 0) return false;
+                    return maxBattery >= activeFilters.battery[0] && maxBattery <= activeFilters.battery[1];
+                })();
 
-  /* ----------  RENDER ---------- */
-  function filterData() {
-    return providersData.filter(p => {
-      const locMatch  = activeFilters.locations===null || activeFilters.locations===p.location;
-      const typeMatch = activeFilters.types.length===0 || p.types.some(t => activeFilters.types.includes(t));
-      const batMatch  = (() => {
-        if (!activeFilters.battery) return true;
-        const maxBat = p.bikes.reduce((m,b)=>Math.max(m,(b.battery||0)+(b.rangeBooster||0)),0);
-        if (maxBat===0) return false;
-        return maxBat>=activeFilters.battery[0] && maxBat<=activeFilters.battery[1];
-      })();
-      const exchMatch = activeFilters.exchangeableBattery===null || p.hasExchangeableBattery===activeFilters.exchangeableBattery;
-      return locMatch && typeMatch && batMatch && exchMatch;
-    });
-  }
+                const exchangeableBatteryMatch = activeFilters.exchangeableBattery === null || provider.hasExchangeableBattery === activeFilters.exchangeableBattery;
 
-  function renderAll() {
-    const filtered = filterData();
-    renderProviderCards(filtered);
-    updateBatteryChart(filtered);
-    updateResultsCount(filtered.length);
-  }
+                return locationMatch && typeMatch && batteryMatch && exchangeableBatteryMatch;
+            });
+        }
+        
+        function renderAll() {
+            const filteredProviders = filterData();
+            renderProviderCards(filteredProviders);
+            updateBatteryChart(filteredProviders);
+            updateResultsCount(filteredProviders.length);
+        }
+        
+        function updateResultsCount(count) {
+            const countEl = document.getElementById('results-count');
+            countEl.textContent = `${count} Result${count === 1 ? '' : 's'}`;
+        }
 
-  function updateResultsCount(c) { document.getElementById('results-count').textContent = `${c} Result${c===1?'':'s'}`; }
+        function renderProviderCards(providers) {
+            const grid = document.getElementById('provider-grid');
+            grid.innerHTML = '';
+            if (providers.length === 0) {
+                grid.innerHTML = `<p class="col-span-full text-center text-stone-600">No providers match the selected filters. Try changing your search.</p>`;
+                return;
+            }
+            providers.forEach(provider => {
+                const maxBattery = provider.bikes.reduce((max, bike) => {
+                    const total = (bike.battery || 0) + (bike.rangeBooster || 0);
+                    return total > max ? total : max;
+                }, 0);
+                
+                const card = document.createElement('div');
+                card.className = 'flex flex-col justify-between p-6 bg-white rounded-lg shadow-md provider-card';
+                card.innerHTML = `
+                    <div>
+                        <div class="flex items-start justify-between">
+                            <h3 class="text-xl font-bold text-cyan-700">${provider.name}</h3>
+                        </div>
+                        <p class="mt-1 text-sm font-semibold text-stone-500">${provider.location}</p>
+                        <p class="mt-4 text-stone-600">${provider.summary}</p>
+                    </div>
+                    <div class="mt-6">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="font-semibold text-stone-700">Types: ${provider.types.join(', ')}</span>
+                            ${maxBattery > 0 ? `<span class="px-3 py-1 font-bold text-white bg-cyan-600 rounded-full">${maxBattery} Wh</span>` : ''}
+                        </div>
+                        <button class="w-full px-4 py-2 mt-4 font-semibold text-center text-white transition-colors rounded-lg bg-cyan-700 hover:bg-cyan-800" onclick='openModal(${provider.id})'>
+                            Show Details
+                        </button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
 
-  function renderProviderCards(list) {
-    const grid = document.getElementById('provider-grid');
-    grid.innerHTML = '';
-    if (list.length===0) { grid.innerHTML = '<p class="col-span-full text-center text-stone-600">No providers match the selected filters.</p>'; return; }
-    list.forEach(p => {
-      const maxBat = p.bikes.reduce((m,b)=>Math.max(m,(b.battery||0)+(b.rangeBooster||0)),0);
-      const card = document.createElement('div');
-      card.className = 'flex flex-col justify-between p-6 bg-white rounded-lg shadow-md provider-card';
-      card.innerHTML = `
-        <div>
-          <h3 class="text-xl font-bold text-cyan-700">${p.name}</h3>
-          <p class="mt-1 text-sm font-semibold text-stone-500">${p.location}</p>
-          <p class="mt-4 text-stone-600">${p.summary}</p>
-        </div>
-        <div class="mt-6">
-          <div class="flex items-center justify-between text-sm">
-            <span class="font-semibold text-stone-700">Types: ${p.types.join(', ')}</span>
-            ${maxBat>0?`<span class="px-3 py-1 font-bold text-white bg-cyan-600 rounded-full">${maxBat} Wh</span>`:''}
-          </div>
-          <button class="w-full px-4 py-2 mt-4 font-semibold text-center text-white transition-colors rounded-lg bg-cyan-700 hover:bg-cyan-800" onclick="openModal(${p.id})">Show Details</button>
-        </div>`;
-      grid.appendChild(card);
-    });
-  }
+        function openModal(providerId) {
+            const provider = providersData.find(p => p.id === providerId);
+            if (!provider) return;
 
-  /* ----------  MODAL ---------- */
-  function openModal(id) {
-    const p = providersData.find(x => x.id===id); if (!p) return;
-    const bikeList = p.bikes.map(b => {
-      let info='';
-      if (b.battery===0) info='<span class="font-semibold text-red-600">Gasoline Engine</span>';
-      else if (b.battery){
-        info=`${b.battery} Wh`;
-        if (b.rangeBooster) info+=` + ${b.rangeBooster} Wh Extender`;
-        if (b.exchangeableBattery) info+=' <span class="text-blue-600">(Exchangeable)</span>';
-        if (b.conflicting) info+=` <span class="text-amber-600">(or ${b.conflicting} Wh?)</span>`;
-      } else info='<span class="text-stone-500">Not specified</span>';
-      return `<li class="flex justify-between py-2 border-b border-stone-200"><span>${b.brand} - ${b.model}</span><span class="font-semibold text-cyan-800">${info}</span></li>`;
-    }).join('');
+            const modalContent = document.getElementById('modal-content');
+            
+            const bikeListHTML = provider.bikes.map(bike => {
+                let batteryInfo = '';
+                if (bike.battery === 0) {
+                    batteryInfo = '<span class="font-semibold text-red-600">Gasoline Engine</span>';
+                } else if (bike.battery) {
+                    batteryInfo = `${bike.battery} Wh`;
+                    if(bike.rangeBooster) batteryInfo += ` + ${bike.rangeBooster} Wh Extender`;
+                    if(bike.exchangeableBattery) batteryInfo += ` <span class="text-blue-600">(Exchangeable)</span>`;
+                    if(bike.conflicting) batteryInfo += ` <span class="text-amber-600">(or ${bike.conflicting} Wh?)</span>`;
+                } else {
+                    batteryInfo = '<span class="text-stone-500">Not specified</span>';
+                }
+                
+                return `<li class="flex justify-between py-2 border-b border-stone-200">
+                    <span class="text-stone-700">${bike.brand} - ${bike.model}</span>
+                    <span class="font-semibold text-cyan-800">${batteryInfo}</span>
+                </li>`;
+            }).join('');
+            
+            modalContent.innerHTML = `
+                <button onclick="closeModal()" class="absolute text-3xl text-stone-500 top-4 right-6">&times;</button>
+                <h2 class="mb-2 text-3xl font-bold text-cyan-800">${provider.name}</h2>
+                <p class="mb-6 text-lg font-semibold text-stone-500">${provider.location}</p>
+                
+                <div class="p-4 mb-6 rounded-lg ${provider.notes.includes('WARNING') || provider.notes.includes('ATTENZIONE') ? 'bg-red-50 text-red-800' : (provider.notes.includes('⚠️') ? 'bg-amber-50 text-amber-800' : 'bg-stone-100 text-stone-700')}">
+                    <h4 class="mb-2 font-bold">Important Notes</h4>
+                    <p>${provider.notes}</p>
+                </div>
 
-    document.getElementById('modal-content').innerHTML = `
-      <button onclick="closeModal()" class="absolute text-3xl text-stone-500 top-4 right-6">&times;</button>
-      <h2 class="mb-2 text-3xl font-bold text-cyan-800">${p.name}</h2>
-      <p class="mb-6 text-lg font-semibold text-stone-500">${p.location}</p>
-      <div class="p-4 mb-6 rounded-lg bg-stone-100 text-stone-700"><h4 class="mb-2 font-bold">Important Notes</h4><p>${p.notes}</p></div>
-      <div><h4 class="mb-3 text-xl font-semibold text-cyan-700">Available E-Bike Fleet</h4><ul class="mb-6">${bikeList}</ul></div>
-      <div><h4 class="mb-2 text-xl font-semibold text-cyan-700">Contact and Info</h4><p class="text-stone-600">${p.contact}</p></div>`;
+                <div>
+                    <h4 class="mb-3 text-xl font-semibold text-cyan-700">Available E-Bike Fleet</h4>
+                    <ul class="mb-6">${bikeListHTML}</ul>
+                </div>
+                
+                <div>
+                    <h4 class="mb-2 text-xl font-semibold text-cyan-700">Contact and Info</h4>
+                    <p class="text-stone-600">${provider.contact}</p>
+                </div>
+            `;
+            
+            document.getElementById('modal-container').classList.remove('hidden');
+            document.getElementById('modal-container').classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
 
-    document.getElementById('modal-container').classList.remove('hidden');
-    document.getElementById('modal-container').classList.add('flex');
-    document.body.style.overflow = 'hidden';
-  }
-  function closeModal(){
-    document.getElementById('modal-container').classList.add('hidden');
-    document.getElementById('modal-container').classList.remove('flex');
-    document.body.style.overflow = 'auto';
-  }
+        function closeModal() {
+            document.getElementById('modal-container').classList.add('hidden');
+            document.getElementById('modal-container').classList.remove('flex');
+            document.body.style.overflow = 'auto';
+        }
+        
+        function updateBatteryChart(providers) {
+            const ctx = document.getElementById('batteryChart').getContext('2d');
+            
+            if (batteryChart) {
+                batteryChart.destroy();
+            }
 
-  /* ----------  CHART ---------- */
-  function updateBatteryChart(list){
-    const ctx = document.getElementById('batteryChart').getContext('2d');
-    if (batteryChart) batteryChart.destroy();
-    const data = list.map(p=>({name:p.name,max:p.bikes.reduce((m,b)=>Math.max(m,(b.battery||0)+(b.rangeBooster||0)),0)})).filter(x=>x.max>0).sort((a,b)=>b.max-a.max);
-    batteryChart = new Chart(ctx,{type:'bar',data:{labels:data.map(x=>x.name),datasets:[{label:'Max Battery (Wh)',data:data.map(x=>x.max),backgroundColor:'rgba(22,163,175,0.7)',borderColor:'rgba(22,163,175,1)',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',scales:{x:{beginAtZero:true,title:{display:true,text:'Watt-hour (Wh)'}},y:{ticks:{autoSkip:false,callback(v){const l=this.getLabelForValue(v);return l.length>25?l.substring(0,25)+'…':l;}}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` Max Capacity: ${c.raw} Wh`}}}}});
-  }
-  </script>
+            const chartData = providers
+                .map(p => ({
+                    name: p.name,
+                    maxBattery: p.bikes.reduce((max, bike) => {
+                         const total = (bike.battery || 0) + (bike.rangeBooster || 0);
+                         return total > max ? total : max;
+                    }, 0)
+                }))
+                .filter(p => p.maxBattery > 0)
+                .sort((a,b) => b.maxBattery - a.maxBattery);
+            
+            batteryChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: chartData.map(p => p.name),
+                    datasets: [{
+                        label: 'Maximum Battery Capacity (Wh)',
+                        data: chartData.map(p => p.maxBattery),
+                        backgroundColor: 'rgba(22, 163, 175, 0.7)',
+                        borderColor: 'rgba(22, 163, 175, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Watt-hour (Wh)'
+                            }
+                        },
+                        y: {
+                           ticks: {
+                                autoSkip: false,
+                                callback: function(value, index, values) {
+                                    const label = this.getLabelForValue(value);
+                                    return label.length > 25 ? label.substring(0, 25) + '...' : label;
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                             callbacks: {
+                                label: function(context) {
+                                    return ` Max Capacity: ${context.raw} Wh`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
 </body>
 </html>
+
